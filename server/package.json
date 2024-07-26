@@ -1,0 +1,21 @@
+{
+  "name": "task_server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "noam",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "gridfs-stream": "^1.1.1",
+    "mongodb": "^5.5.0",
+    "mongoose": "^7.1.1",
+    "multer": "^1.4.5-lts.1",
+    "multer-gridfs-storage": "^5.0.2",
+    "serverless-http": "^3.2.0"
+  }
+}
