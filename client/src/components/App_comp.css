@@ -1,0 +1,115 @@
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+ }
+ .text-right{
+  text-align: right;
+ }
+ .nav{
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  height:100%;
+  padding: 20px;
+ }
+ nav .nav-left,.nav-right{
+  margin:2px 20px;
+ }
+ nav .nav-left a{
+  font-size: 23px;
+  color: gray
+ }
+ nav a{
+  color:black;
+  text-decoration: none;
+  font-size: 20px;
+ }
+ 
+ .nav-button {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+  font-size: 20px;
+  
+  
+  cursor: pointer;
+}
+
+
+
+.trash-can {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  position: fixed;
+ 
+  
+}
+
+.container-task {
+  width: 500px; /* Default max-width for larger screens */
+  overflow: auto;
+  max-height: 60vh;
+}
+
+@media (max-width: 768px) {
+  /* Apply styles for screens up to 768px width (e.g., phones) */
+  .container-task {
+    width: 100%; /* Use full width of the screen */
+    max-height: 50vh;
+  }
+}
+
+
+
+
+
+.trash-icon {
+  margin: auto;
+}
+
+#mainNav {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  background-color: rgb(44,62,80);
+}
+
+.datepicker {
+  display:auto;
+  text-align:center;
+  max-width: 97px;
+}
+
+.alert {
+  max-width: 50vw;
+  display: flex;
+  justify-content: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.text-block {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width:9vw;
+}
+
+@media (max-width: 768px) {
+  /* Apply styles for screens up to 768px width (e.g., phones) */
+  .text-block {
+    max-width:25vw; /* Use full width of the screen */
+    
+  }
+}
+
+.table-fields {
+  display:auto;
+  max-width: 20vw;
+
+}

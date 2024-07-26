@@ -1,0 +1,110 @@
+body {
+  background-color: rgba(204, 242, 247, 0.37);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.App {
+  text-align: center;
+
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+ }
+ .text-right{
+  text-align: right;
+ }
+ .nav{
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  height:100%;
+  padding: 20px;
+ }
+ nav .nav-left,.nav-right{
+  margin:2px 20px;
+ }
+ nav .nav-left a{
+  font-size: 23px;
+  color: gray
+ }
+ nav a{
+  color:black;
+  text-decoration: none;
+  font-size: 20px;
+ }
+ 
+
+ .task_edit form{
+  display: flex;flex-direction: column;
+ }
+ .task_edit form input,label,button{
+  margin:5px 10px!important;
+ }
+
+
+ .form-container {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.6s ease-in-out;
+}
+
+.form-container.expanded {
+  max-height: 500px; /* Adjust the height according to your needs */
+}
+
+.trash-can {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.trash-icon {
+  margin: auto;
+}
+
+#mainNav {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  background-color: rgb(48, 48, 61);
+}
