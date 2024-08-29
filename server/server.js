@@ -7,9 +7,15 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const XrayImage = require('./models/XrayImage');
-const { GridFsStorage } = require('multer-gridfs-storage');
-const Grid = require('gridfs-stream');
+
 const crypto = require('crypto');
+const axios = require('axios');
+
+const { spawn } = require('child_process');
+
+const fs = require('fs').promises;
+const os = require('os');
+
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || 'localhost';
@@ -18,64 +24,137 @@ app.use(cors());
 
 app.use(express.json());
 
-const mongoURI = "mongodb://localhost:27017/";
-mongoose.connect(mongoURI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => {
-    console.log('Connected to MongoDB');
-  })
-  .catch(error => {
-    console.error('Error connecting to MongoDB:', error);
-  });
+const mongoURI = "mongodb://localhost:27017/test";
+
+
+mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(error => console.error('Error connecting to MongoDB:', error));
 
 // Create mongo connection
 const conn = mongoose.createConnection(mongoURI);
 
-// Init gfs
-let gfs;
-conn.once('open', () => {
-  // Init stream
-  gfs = Grid(conn.db, mongoose.mongo);
-  gfs.collection('uploads');
+
+const ImageSchema = new mongoose.Schema({
+  filename: String,
+  contentType: String,
+  imageData: Buffer,
+  classification: Object
 });
 
-// Create storage engine
-const storage = new GridFsStorage({
-  url: mongoURI,
-  file: (req, file) => {
+
+const Image = mongoose.model('Image', ImageSchema);
+
+const upload = multer({
+  storage: multer.memoryStorage()
+});
+
+async function classifyXRay(imageBuffer) {
+  const tempFilePath = path.join(os.tmpdir(), `temp_image_${Date.now()}.jpg`);
+  
+  try {
+    await fs.writeFile(tempFilePath, imageBuffer);
+    console.log(`Temporary file created at: ${tempFilePath}`);
+
+    // Check if the file exists
+    await fs.access(tempFilePath);
+    console.log('Temporary file exists and is accessible');
+
     return new Promise((resolve, reject) => {
-      crypto.randomBytes(16, (err, buf) => {
-        if (err) {
-          return reject(err);
+      const pythonProcess = spawn('python', [
+        path.join(__dirname, 'xray_classifier.py'),
+        tempFilePath
+      ]);
+
+      let result = '';
+      let debugInfo = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        result += data.toString();
+        console.log('Python script output:', data.toString());
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        debugInfo += data.toString();
+        console.error('Python script error:', data.toString());
+      });
+
+      pythonProcess.on('close', async (code) => {
+        console.log('Python script execution completed with code:', code);
+        console.log('Full debug info:', debugInfo);
+        console.log('Full result:', result);
+
+        // Clean up the temporary file
+        try {
+          await fs.unlink(tempFilePath);
+          console.log('Temporary file deleted');
+        } catch (unlinkError) {
+          console.error('Error deleting temporary file:', unlinkError);
         }
-        const filename = buf.toString('hex') + path.extname(file.originalname);
-        const fileInfo = {
-          filename: filename,
-          bucketName: 'uploads'
-        };
-        resolve(fileInfo);
+
+        if (code !== 0) {
+          reject(new Error(`Python script exited with code ${code}: ${debugInfo}`));
+        } else {
+          try {
+            const parsedResult = JSON.parse(result);
+            console.log('Parsed result:', parsedResult);
+            resolve(parsedResult);
+          } catch (e) {
+            console.error('Failed to parse Python output:', result);
+            reject(new Error(`Failed to parse Python output: ${result}`));
+          }
+        }
       });
     });
+  } catch (error) {
+    console.error('Error in classifyXRay:', error);
+    throw error;
   }
-});
-
-const upload = multer({ storage });
+}
 
 // Add this new route for image upload
-app.post('/upload', upload.single('image'), (req, res) => {
+app.post('/upload', upload.single('image'), async (req, res) => {
   if (req.file) {
-    res.json({
-      message: 'File uploaded successfully to MongoDB',
-      file: req.file
-    });
+    console.log('File received:', req.file.originalname);
+    try {
+      console.log('Starting image classification...');
+      const classification = await classifyXRay(req.file.buffer);
+      console.log('Classification completed:', classification);
+
+      const newImage = new Image({
+        filename: req.file.originalname,
+        contentType: req.file.mimetype,
+        imageData: req.file.buffer,
+        classification: classification
+      });
+
+      console.log('Saving image to database...');
+      await newImage.save();
+      console.log('Image saved successfully');
+
+      res.json({
+        message: 'X-ray classified and uploaded successfully',
+        file: {
+          filename: req.file.originalname,
+          id: newImage._id
+        },
+        classification: classification
+      });
+    } catch (error) {
+      console.error('Error processing upload:', error);
+      res.status(500).json({
+        message: 'Error processing upload',
+        error: error.toString()
+      });
+    }
   } else {
+    console.log('No file uploaded');
     res.status(400).json({
       message: 'No file uploaded'
     });
   }
 });
+
 
 // Route to retrieve an image
 app.get('/image/:filename', (req, res) => {
