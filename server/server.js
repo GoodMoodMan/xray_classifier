@@ -24,8 +24,7 @@ app.use(cors());
 
 app.use(express.json());
 
-const mongoURI = "mongodb://localhost:27017/test";
-
+const mongoURI = "mongodb+srv://test:ljR36wHjImUdTaad@cluster0.flnm2su.mongodb.net/test3?retryWrites=true&w=majority";
 
 mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('Connected to MongoDB'))
