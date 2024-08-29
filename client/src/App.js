@@ -40,7 +40,7 @@ function App() {
     // this useEffect hook gets called on any change to tasks,
     // putting the new task list to server using saved username
   
-    fetch(`https://${server_ip}/users/${true_username}/tasks`, {
+    fetch(`http://${server_ip}/users/${true_username}/tasks`, {
       
       method: 'PUT',
       headers: {
@@ -71,7 +71,7 @@ function App() {
 
   const HandleLogin = (username, password) => {
   
-    fetch(`https://${server_ip}/users/login`, {
+    fetch(`http://${server_ip}/users/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -162,7 +162,7 @@ function App() {
     }
 
 
-    fetch(`https://${server_ip}/users/signup`, {
+    fetch(`http://${server_ip}/users/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
