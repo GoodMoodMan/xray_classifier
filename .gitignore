@@ -1,0 +1,14 @@
+# Ignore node_modules in server directory
+server/node_modules/
+
+# Ignore node_modules in client directory
+client/node_modules/
+
+# Ignore node_modules in root directory (if applicable)
+/node_modules/
+
+# Optional: Ignore logs
+*.log
+
+# Optional: Ignore environment files
+.env

@@ -60,7 +60,7 @@ async function classifyXRay(imageBuffer) {
     console.log('Temporary file exists and is accessible');
 
     return new Promise((resolve, reject) => {
-      const pythonProcess = spawn('python', [
+      const pythonProcess = spawn('py', [
         path.join(__dirname, 'xray_classifier.py'),
         tempFilePath
       ]);
