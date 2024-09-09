@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, deleteImage }) => {
   useEffect(() => {
     fetchUntrainedImages();
-  }, [fetchUntrainedImages]);
+  }, []);
 
   const [expandedRow, setExpandedRow] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -42,8 +42,17 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
   };
 
   const getImageSrc = (binaryData) => {
-    const binaryString = binaryData.toString('base64');
-    return `data:image/png;base64,${binaryString}`;
+    if (binaryData) {
+      // Convert binary data to a Blob
+      const blob = new Blob([binaryData], { type: 'image/png' }); // Adjust type if necessary
+
+      // Create a URL for the Blob
+      const url = URL.createObjectURL(blob);
+
+
+      // Clean up the URL when the component unmounts
+      return url;
+    }
   };
 
   return (
