@@ -6,6 +6,7 @@ import Body from './components/Body';
 import HeaderTask from './components/HeaderTask';
 import BodyTask from './components/BodyTask';
 import BodyAdmin from './components/BodyAdmin';
+import ImageDataTable from './components/ImageDataTable';
 
 const server_ip = 'localhost:3000';
 
@@ -28,41 +29,9 @@ function App() {
 
   const [guest, setGuest] = useState(false);
   const [admin, setAdmin] = useState(false);
+  const [untrainedImages, setUntrainedImages] = useState([]);
 
 
-  useEffect(() => {
-    // if username is empty string dont post
-    if (true_username==='') {
-      return;
-    }
-    // if user is a guest dont post to server
-    if (guest) return;
-    // this useEffect hook gets called on any change to tasks,
-    // putting the new task list to server using saved username
-  
-    fetch(`http://${server_ip}/users/${true_username}/tasks`, {
-      
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ tasks }),
-    })
-      .then(response => {
-        if (response.ok) {
-        
-
-        } else {
-          console.error('Failed to update task list:', response.statusText);
-        }
-      })
-      .catch(error => {
-        console.error('Error occurred:', error);
-      });
-  
-
-
-  }, [tasks, guest, true_username])
 
   // every change to current tab, reset alert
   useEffect(() => {
@@ -106,7 +75,7 @@ function App() {
 
         setUsername(username);
         setAdmin(data.admin);
-        
+        console.log("Admin status:", data.admin);
         
         setLoggedin(true);
         setTasks(data.tasks);
@@ -215,11 +184,16 @@ function App() {
     setGuest(true);
   }
 
-  const handleUploadImage = (file) => {
-    const formData = new FormData();
-    formData.append('image', file);
-    formData.append('username', true_username);
-
+  const handleUploadImage = (formData) => {
+    // Log each entry, including files, but files might not log as expected
+    formData.forEach((value, key) => {
+      if (key === 'image') {
+        console.log(`${key}: [File name: ${value.name}, Type: ${value.type}]`); // Logging file details
+      } else {
+        console.log(`${key}: ${value}`);
+      }
+    });
+  
     fetch(`http://${server_ip}/upload`, {
       method: 'POST',
       body: formData,
@@ -231,13 +205,85 @@ function App() {
         throw new Error('Network response was not ok.');
       })
       .then(data => {
-        setMessage('Image uploaded successfully');
+        setMessage('Image uploaded and classified successfully');
         setAlertType(1);
-        // Handle the response data as needed
+        console.log('Upload response:', data);
+        return data;
       })
       .catch(error => {
         console.error('Error:', error);
-        setMessage('Failed to upload image');
+        setMessage('Failed to upload or classify image');
+        setAlertType(0);
+        throw error;
+      });
+  };
+  
+  const fetchUntrainedImages = () => {
+    fetch(`http://${server_ip}/untrained-images`)
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+        throw new Error('Failed to fetch untrained images');
+      })
+      .then(data => {
+        setUntrainedImages(data);
+      })
+      .catch(error => {
+        console.error('Error fetching untrained images:', error);
+        setMessage('Failed to fetch untrained images');
+        setAlertType(0);
+      });
+  };
+
+  // 2. Edit image information
+  const editImageInfo = (imageId, updatedInfo) => {
+    fetch(`http://${server_ip}/images/${imageId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updatedInfo)
+    })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+        throw new Error('Failed to update image information');
+      })
+      .then(data => {
+        setMessage('Image information updated successfully');
+        setAlertType(1);
+        // Update the untrainedImages state with the new information
+        setUntrainedImages(prevImages => 
+          prevImages.map(img => img._id === imageId ? { ...img, ...updatedInfo } : img)
+        );
+      })
+      .catch(error => {
+        console.error('Error updating image information:', error);
+        setMessage('Failed to update image information');
+        setAlertType(0);
+      });
+  };
+
+  // 3. Delete image from the dataset
+  const deleteImage = (imageId) => {
+    fetch(`http://${server_ip}/images/${imageId}`, {
+      method: 'DELETE'
+    })
+      .then(response => {
+        if (response.ok) {
+          setMessage('Image deleted successfully');
+          setAlertType(1);
+          // Remove the deleted image from the untrainedImages state
+          setUntrainedImages(prevImages => prevImages.filter(img => img._id !== imageId));
+        } else {
+          throw new Error('Failed to delete image');
+        }
+      })
+      .catch(error => {
+        console.error('Error deleting image:', error);
+        setMessage('Failed to delete image');
         setAlertType(0);
       });
   };
@@ -255,20 +301,25 @@ function App() {
 
   else {
     if (admin) {
+      console.log("Rendering admin page");
       return (
         <div className="App">
           <HeaderTask HandleLogoff={HandleLogoff}></HeaderTask>
-          <BodyAdmin taskList={tasks} setTasks={setTasks} server_ip = {server_ip} alert_type={alert_type} setAlert = {setAlertType} message={message} setMessage={setMessage}></BodyAdmin>
-          
+          <ImageDataTable 
+            untrainedImages={untrainedImages}
+            fetchUntrainedImages={fetchUntrainedImages}
+            editImageInfo={editImageInfo}
+            deleteImage={deleteImage}
+            server_ip={server_ip}
+          ></ImageDataTable>
         </div>
       );
-
     }
     else {
       return (
         <div className="App">
           <HeaderTask HandleLogoff={HandleLogoff}></HeaderTask>
-          <BodyTask taskList={tasks} setTasks={setTasks} handleUploadImage={handleUploadImage}></BodyTask>
+          <BodyTask handleUploadImage={handleUploadImage}></BodyTask>
         </div>
       );
     }

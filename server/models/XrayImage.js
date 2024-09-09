@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 
 const XrayImageSchema = new mongoose.Schema({
-  filename: {
+  personId: {
     type: String,
     required: true
   },
-  originalName: {
-    type: String,
+  imageData: {
+    type: Buffer,
     required: true
   },
   contentType: {
@@ -21,15 +21,14 @@ const XrayImageSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  classification: {
+    type: Object,
+    default: {}
+  },
   analysis: {
     type: String,
     default: 'Pending'
   },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  }
 });
 
 module.exports = mongoose.model('XrayImage', XrayImageSchema);
