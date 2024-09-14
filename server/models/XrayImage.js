@@ -29,6 +29,11 @@ const XrayImageSchema = new mongoose.Schema({
     type: String,
     default: 'Pending'
   },
+  finalClassification: {
+    type: String,
+    enum: ['Normal', 'Pneumonia', 'COVID-19', 'Tuberculosis', 'Other'],
+    required: true
+  }
 });
 
 module.exports = mongoose.model('XrayImage', XrayImageSchema);
