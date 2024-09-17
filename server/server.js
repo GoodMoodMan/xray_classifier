@@ -301,6 +301,122 @@ app.get('/untrained-images', async (req, res) => {
   }
 });
 
+app.post('/finetune', async (req, res) => {
+  console.log('Received fine-tune request');
+
+  try {
+    const pythonProcess = spawn('python', ['finetune.py']);
+
+    let result = '';
+    let errorOutput = '';
+
+    // Capture output from Python script
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+      console.log('Python script output:', data.toString());
+    });
+
+    // Capture any errors
+    pythonProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      console.error('Python script error:', data.toString());
+    });
+
+    // When the Python process finishes
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        res.status(200).json({ message: 'Fine-tuning completed', output: result });
+      } else {
+        res.status(500).json({ message: 'Fine-tuning failed', error: errorOutput });
+      }
+    });
+  } catch (error) {
+    console.error('Error during fine-tuning:', error);
+    res.status(500).json({ message: 'Error during fine-tuning', error: error.toString() });
+  }
+});
+
+
+app.get('/download-untrained-images', async (req, res) => {
+  try {
+    const untrainedImages = await XrayImage.find({ analysis: 'Untrained' });
+    
+    const baseDir = path.join(__dirname, 'untrained_images');
+    try {
+      await fs.access(baseDir);
+    } catch {
+      await fs.mkdir(baseDir, { recursive: true });
+    }
+
+    let downloadedCount = 0;
+    let skippedCount = 0;
+
+    for (const image of untrainedImages) {
+      const classificationDir = path.join(baseDir, image.finalClassification);
+      try {
+        await fs.access(classificationDir);
+      } catch {
+        await fs.mkdir(classificationDir, { recursive: true });
+      }
+
+      const filePath = path.join(classificationDir, `${image._id}.png`);
+      
+      // Check if file already exists
+      try {
+        await fs.access(filePath);
+        // If we reach here, the file exists
+        skippedCount++;
+      } catch {
+        // If we reach here, the file doesn't exist, so we create it
+        await fs.writeFile(filePath, image.imageData);
+        downloadedCount++;
+      }
+    }
+
+  app.post('/finetune', async (req, res) => {
+  console.log('Received fine-tune request');
+
+  try {
+    const pythonProcess = spawn('python', ['finetune.py']);
+
+    let result = '';
+    let errorOutput = '';
+
+    // Capture output from Python script
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+      console.log('Python script output:', data.toString());
+    });
+
+    // Capture any errors
+    pythonProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      console.error('Python script error:', data.toString());
+    });
+
+    // When the Python process finishes
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        res.status(200).json({ message: 'Fine-tuning completed', output: result });
+      } else {
+        res.status(500).json({ message: 'Fine-tuning failed', error: errorOutput });
+      }
+    });
+  } catch (error) {
+    console.error('Error during fine-tuning:', error);
+    res.status(500).json({ message: 'Error during fine-tuning', error: error.toString() });
+  }
+});
+
+    res.send(`Operation complete. Downloaded ${downloadedCount} new images. Skipped ${skippedCount} existing images.`);
+  } catch (error) {
+    console.error('Error processing untrained images:', error);
+    res.status(500).json({ error: 'Failed to process untrained images' });
+  }
+});
+
+module.exports = app;
+
 app.put('/images/:imageId', async (req, res) => {
   const { imageId } = req.params;
   const updatedInfo = req.body;

@@ -287,6 +287,48 @@ function App() {
       });
   };
 
+  const runFineTune = () => {
+    fetch(`http://${server_ip}/finetune`, {
+      method: 'POST',
+    })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+        throw new Error('Failed to fine-tune the model');
+      })
+      .then(data => {
+        setMessage('Fine-tuning completed successfully');
+        setAlertType(1); // Success
+        console.log('Fine-tuning output:', data.output);
+      })
+      .catch(error => {
+        console.error('Error during fine-tuning:', error);
+        setMessage('Fine-tuning failed');
+        setAlertType(0); // Failure
+      });
+  };
+
+  const downloadUntrainedImages = () => {
+    fetch(`http://${server_ip}/download-untrained-images`)
+      .then(response => {
+        if (response.ok) {
+          return response.text();
+        }
+        throw new Error('Failed to download untrained images');
+      })
+      .then(data => {
+        setMessage(data);
+        setAlertType(1);
+      })
+      .catch(error => {
+        console.error('Error downloading untrained images:', error);
+        setMessage('Failed to download untrained images');
+        setAlertType(0);
+      });
+  };
+
+
   const editImageInfo = (imageId, updatedInfo) => {
     fetch(`http://${server_ip}/images/${imageId}`, {
       method: 'PUT',
@@ -358,6 +400,8 @@ function App() {
             fetchUntrainedImages={fetchUntrainedImages}
             editImageInfo={editImageInfo}
             deleteImage={deleteImage}
+            downloadUntrainedImages={downloadUntrainedImages}
+            runFineTune={runFineTune}
             server_ip={server_ip}
           ></ImageDataTable>
         </div>

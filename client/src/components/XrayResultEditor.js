@@ -3,23 +3,32 @@ import React, { useState, useEffect } from 'react';
 function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent }) {
   const [personId, setPersonId] = useState('');
   const [finalClassification, setFinalClassification] = useState('Normal');
-  
+  const [topClassifications, setTopClassifications] = useState([]);
+
   useEffect(() => {
     if (xrayData) {
       setPersonId(xrayData.personId || '');
       setFinalClassification(xrayData.classification || 'Normal');
+      
+      // Get the top 3 highest values in classification
+      if (xrayData.classification) {
+        const sortedClassifications = Object.entries(xrayData.classification)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 3)
+          .map(([key, value]) => ({
+            name: key,
+            percentage: (value * 100).toFixed(2) // Convert to percentage and format to 2 decimal places
+          }));
+        setTopClassifications(sortedClassifications);
+      }
     }
   }, [xrayData]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    
-    // Create a new FormData object
     const formData = new FormData();
     
-    // Append the image data
     if (typeof xrayData.imageData === 'string') {
-      // If it's a base64 string, convert it to a Blob
       const byteCharacters = atob(xrayData.imageData);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -29,17 +38,14 @@ function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent 
       const blob = new Blob([byteArray], {type: 'image/png'});
       formData.append('imageData', blob, 'image.png');
     } else if (xrayData.imageData && xrayData.imageData.type === 'Buffer') {
-      // If it's a Buffer, convert it to a Blob
       const blob = new Blob([new Uint8Array(xrayData.imageData.data)], {type: 'image/png'});
       formData.append('imageData', blob, 'image.png');
     }
     
-    // Append other data
     formData.append('personId', personId);
     formData.append('finalClassification', finalClassification);
     formData.append('classification', JSON.stringify(xrayData.classification));
 
-    // Call uploadImageToDataset with the FormData
     uploadImageToDataset(formData);
   };
 
@@ -49,7 +55,6 @@ function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent 
 
   const getImageSrc = (imageData) => {
     if (typeof imageData === 'string') {
-      // If imageData is already a base64 string
       return `data:image/png;base64,${imageData}`;
     } else if (imageData && imageData.type === 'Buffer' && Array.isArray(imageData.data)) {
       try {
@@ -70,7 +75,6 @@ function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent 
     <div className="container mt-5">
       <form onSubmit={handleSubmit}>
         <div className="row">
-          {/* Image Section */}
           <div className="col-md-6">
             <div className="mb-3">
               <div style={{ width: '100%', height: '300px', overflow: 'hidden' }}>
@@ -87,16 +91,16 @@ function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent 
             </div>
           </div>
 
-          {/* Classification Info */}
           <div className="col-md-6">
             <div className="mb-3">
-              <label className="form-label">Original Classification</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={xrayData ? JSON.stringify(xrayData.classification) || '' : ''}
-                readOnly 
-              />
+              <label className="form-label">Top 3 Classifications</label>
+              <ul className="list-group">
+                {topClassifications.map((classification, index) => (
+                  <li key={index} className="list-group-item">
+                    {classification.name}: {classification.percentage}%
+                  </li>
+                ))}
+              </ul>
             </div>
             <div className="mb-3">
               <label htmlFor="personId" className="form-label">Person ID</label>
@@ -128,7 +132,6 @@ function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent 
           </div>
         </div>
 
-        {/* Submit and Cancel Buttons */}
         <div className="text-center mt-4">
           <button type="submit" className="btn btn-success me-2">
             Submit
