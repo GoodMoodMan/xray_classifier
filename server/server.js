@@ -7,9 +7,6 @@ const multer = require('multer');
 const path = require('path');
 const XrayImage = require('./models/XrayImage');
 
-const crypto = require('crypto');
-const axios = require('axios');
-
 const { spawn } = require('child_process');
 
 const fs = require('fs').promises;
@@ -27,9 +24,12 @@ mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('Connected to MongoDB'))
   .catch(error => console.error('Error connecting to MongoDB:', error));
 
-const upload = multer({
-  storage: multer.memoryStorage()
-});
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // Limit file size to 10MB
+    },
+  });
 
 async function classifyXRay(imageBuffer) {
   const tempFilePath = path.join(os.tmpdir(), `temp_image_${Date.now()}.jpg`);
@@ -92,8 +92,44 @@ async function classifyXRay(imageBuffer) {
   }
 }
 
-app.post('/upload', upload.single('image'), async (req, res) => {
-  console.log('Received upload request');
+app.post('/validate-and-classify', upload.single('image'), async (req, res) => {
+  console.log('Received validate and classify request');
+  console.log('Request body:', req.body);
+  console.log('File:', req.file);
+
+  if (!req.file) {
+    console.log('No file uploaded');
+    return res.status(400).json({ 
+      message: 'No file uploaded', 
+      isValid: false, 
+      classification: null
+    });
+  }
+
+  try {
+    console.log('Starting image classification...');
+    const classification = await classifyXRay(req.file.buffer);
+    console.log('Classification completed:', classification);
+
+    res.json({
+      message: 'X-ray classified successfully',
+      isValid: classification.is_xray,
+      classification: classification.chest_conditions
+    });
+  } catch (error) {
+    console.error('Error during classification:', error);
+    res.status(500).json({
+      message: 'Error during classification',
+      isValid: false,
+      classification: null,
+      error: error.toString()
+    });
+  }
+});
+
+
+app.post('/upload-to-dataset', upload.single('imageData'), async (req, res) => {
+  console.log('Received upload to dataset request');
   console.log('Request body:', req.body);
   console.log('File:', req.file);
 
@@ -102,24 +138,21 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     return res.status(400).json({ message: 'No file uploaded' });
   }
 
-  if (!req.body.personId) {
-    console.log('No personId provided');
-    return res.status(400).json({ message: 'Person ID is required' });
+  if (!req.body.personId || !req.body.finalClassification || !req.body.classification) {
+    console.log('Missing required fields');
+    return res.status(400).json({ message: 'Person ID, final classification, and classification are required' });
   }
 
-  console.log('File received:', req.file.originalname);
   try {
-    console.log('Starting image classification...');
-    const classification = await classifyXRay(req.file.buffer);
-    console.log('Classification completed:', classification);
-
     const newXrayImage = new XrayImage({
       personId: req.body.personId,
       imageData: req.file.buffer,
       contentType: req.file.mimetype,
       size: req.file.size,
-      classification: classification,
-      analysis: 'Untrained'
+      classification: JSON.parse(req.body.classification),
+      analysis: 'Untrained',
+      finalClassification: req.body.finalClassification,
+      uploadDate: new Date()
     });
 
     console.log('Saving X-ray image to database...');
@@ -127,12 +160,11 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     console.log('X-ray image saved successfully');
 
     res.json({
-      message: 'X-ray classified and uploaded successfully',
+      message: 'X-ray uploaded to dataset successfully',
       file: {
         filename: req.file.originalname,
         id: newXrayImage._id
-      },
-      classification: classification
+      }
     });
   } catch (error) {
     console.error('Error processing upload:', error);
@@ -269,12 +301,16 @@ app.get('/untrained-images', async (req, res) => {
   }
 });
 
-// New route: Edit image information
 app.put('/images/:imageId', async (req, res) => {
   const { imageId } = req.params;
   const updatedInfo = req.body;
 
   try {
+    // Validate imageId
+    if (!mongoose.Types.ObjectId.isValid(imageId)) {
+      return res.status(400).json({ error: 'Invalid image ID' });
+    }
+
     const updatedImage = await XrayImage.findByIdAndUpdate(imageId, updatedInfo, { new: true });
     if (!updatedImage) {
       return res.status(404).json({ error: 'Image not found' });
@@ -282,7 +318,7 @@ app.put('/images/:imageId', async (req, res) => {
     res.json(updatedImage);
   } catch (error) {
     console.error('Error updating image information:', error);
-    res.status(500).json({ error: 'Failed to update image information' });
+    res.status(500).json({ error: 'Failed to update image information', details: error.message });
   }
 });
 

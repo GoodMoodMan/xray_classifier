@@ -9,6 +9,8 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
   const [editMode, setEditMode] = useState(false);
   const [editedImage, setEditedImage] = useState(null);
 
+  const classificationOptions = ['Normal', 'Pneumonia', 'COVID-19', 'Tuberculosis', 'Other'];
+
   const handleRowClick = (index) => {
     if (!editMode || editedImage._id !== untrainedImages[index]._id) {
       setExpandedRow(expandedRow === index ? null : index);
@@ -23,8 +25,7 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
   const handleSave = () => {
     editImageInfo(editedImage._id, {
       personId: editedImage.personId,
-      analysis: editedImage.classification,
-      classification: editedImage.classification
+      finalClassification: editedImage.finalClassification
     });
     setEditMode(false);
     setEditedImage(null);
@@ -41,17 +42,20 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
     }
   };
 
-  const getImageSrc = (binaryData) => {
-    if (binaryData) {
-      // Convert binary data to a Blob
-      const blob = new Blob([binaryData], { type: 'image/png' }); // Adjust type if necessary
-
-      // Create a URL for the Blob
-      const url = URL.createObjectURL(blob);
-
-
-      // Clean up the URL when the component unmounts
-      return url;
+  const getImageSrc = (imageData) => {
+    if (imageData && imageData.type === 'Buffer' && Array.isArray(imageData.data)) {
+      try {
+        const uint8Array = new Uint8Array(imageData.data);
+        const blob = new Blob([uint8Array], { type: 'image/png' });
+        const url = URL.createObjectURL(blob);
+        return url;
+      } catch (error) {
+        console.error('Error creating image URL:', error);
+        return null;
+      }
+    } else {
+      console.warn('Unexpected image data format:', imageData);
+      return null;
     }
   };
 
@@ -61,7 +65,7 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
         <tr>
           <th>Person ID</th>
           <th>Upload Date</th>
-          <th>Classification</th>
+          <th>Final Classification</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -77,8 +81,18 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
               <td>{new Date(image.uploadDate).toLocaleDateString()}</td>
               <td>
                 {editMode && editedImage._id === image._id
-                  ? <textarea className="form-control" value={JSON.stringify(editedImage.classification, null, 2)} onChange={(e) => setEditedImage({ ...editedImage, classification: JSON.parse(e.target.value) })}></textarea>
-                  : image.classification.toString()}
+                  ? (
+                    <select 
+                      className="form-control"
+                      value={editedImage.finalClassification}
+                      onChange={(e) => setEditedImage({ ...editedImage, finalClassification: e.target.value })}
+                    >
+                      {classificationOptions.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  )
+                  : image.finalClassification}
               </td>
               <td>
                 {editMode && editedImage._id === image._id
@@ -99,11 +113,13 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
             {expandedRow === index && !editMode && (
               <tr>
                 <td colSpan="4">
-                  <img
-                    src={getImageSrc(image.imageData)}
-                    alt="Untrained"
-                    className="img-fluid"
-                  />
+                  <div style={{ width: '100%', height: '300px', overflow: 'hidden' }}>
+                    <img
+                      src={getImageSrc(image.imageData)}
+                      alt="Untrained"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
                 </td>
               </tr>
             )}
