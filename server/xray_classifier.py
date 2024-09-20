@@ -113,8 +113,9 @@ def classify_image(image_path):
         chest_probabilities = predict_chest_conditions(chest_classifier, image_tensor, age, gender, view)
         
         # Define your chest condition labels
-        chest_labels = ['Atelectasis', 'Cardiomegaly', 'Consolidation', 'Effusion', 
-                        'Infiltration', 'Mass', 'Nodule', 'No Finding']
+        chest_labels = ['Atelectasis', 'Cardiomegaly', 'Edema', 'Effusion', 
+                    'Infiltration', 'Mass', 'No Finding', 'Nodule', 
+                    'Pneumothorax', 'Consolidation/Pneumonia']
         
         chest_results = {label: prob.item() for label, prob in zip(chest_labels, chest_probabilities)}
         
