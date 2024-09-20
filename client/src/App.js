@@ -309,6 +309,7 @@ function App() {
       });
   };
 
+
   const downloadUntrainedImages = () => {
     fetch(`http://${server_ip}/download-untrained-images`)
       .then(response => {
@@ -402,7 +403,6 @@ function App() {
             deleteImage={deleteImage}
             downloadUntrainedImages={downloadUntrainedImages}
             runFineTune={runFineTune}
-            server_ip={server_ip}
           ></ImageDataTable>
         </div>
       );

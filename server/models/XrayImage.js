@@ -31,7 +31,9 @@ const XrayImageSchema = new mongoose.Schema({
   },
   finalClassification: {
     type: String,
-    enum: ['Normal', 'Pneumonia', 'COVID-19', 'Tuberculosis', 'Other'],
+    enum: ['Atelectasis', 'Cardiomegaly', 'Edema', 'Effusion', 
+                    'Infiltration', 'Mass', 'No Finding', 'Nodule', 
+                    'Pneumothorax', 'Consolidation/Pneumonia'],
     required: true
   }
 });

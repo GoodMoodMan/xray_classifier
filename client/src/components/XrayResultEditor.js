@@ -2,16 +2,27 @@ import React, { useState, useEffect } from 'react';
 
 function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent }) {
   const [personId, setPersonId] = useState('');
-  const [finalClassification, setFinalClassification] = useState('Normal');
+  const [finalClassification, setFinalClassification] = useState('No Finding');
   const [topClassifications, setTopClassifications] = useState([]);
+
+  const classificationOptions = [
+    'Atelectasis', 'Cardiomegaly', 'Edema', 'Effusion', 
+    'Infiltration', 'Mass', 'No Finding', 'Nodule', 
+    'Pneumothorax', 'Consolidation/Pneumonia'
+  ];
 
   useEffect(() => {
     if (xrayData) {
       setPersonId(xrayData.personId || '');
-      setFinalClassification(xrayData.classification || 'Normal');
+
+      // Set finalClassification as a string, ensuring it takes the first classification name
+      const classificationName = typeof xrayData.classification === 'object'
+        ? Object.keys(xrayData.classification)[0] || 'No Finding'
+        : 'No Finding';
+      setFinalClassification(classificationName);
       
-      // Get the top 3 highest values in classification
-      if (xrayData.classification) {
+      // Get the top 3 highest values in classification object (if it exists)
+      if (xrayData.classification && typeof xrayData.classification === 'object') {
         const sortedClassifications = Object.entries(xrayData.classification)
           .sort(([, a], [, b]) => b - a)
           .slice(0, 3)
@@ -43,7 +54,7 @@ function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent 
     }
     
     formData.append('personId', personId);
-    formData.append('finalClassification', finalClassification);
+    formData.append('finalClassification', finalClassification); // Already a string
     formData.append('classification', JSON.stringify(xrayData.classification));
 
     uploadImageToDataset(formData);
@@ -122,11 +133,9 @@ function XrayResultEditor({ xrayData, uploadImageToDataset, setCurrentComponent 
                 onChange={(e) => setFinalClassification(e.target.value)} 
                 required
               >
-                <option value="Normal">Normal</option>
-                <option value="Pneumonia">Pneumonia</option>
-                <option value="COVID-19">COVID-19</option>
-                <option value="Tuberculosis">Tuberculosis</option>
-                <option value="Other">Other</option>
+                {classificationOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
               </select>
             </div>
           </div>

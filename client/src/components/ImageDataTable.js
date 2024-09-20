@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, deleteImage, downloadUntrainedImages }) => {
+const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, deleteImage, downloadUntrainedImages, runFineTune }) => {
   useEffect(() => {
     fetchUntrainedImages();
   }, []);
@@ -9,7 +9,9 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
   const [editMode, setEditMode] = useState(false);
   const [editedImage, setEditedImage] = useState(null);
 
-  const classificationOptions = ['Normal', 'Pneumonia', 'COVID-19', 'Tuberculosis', 'Other'];
+  const classificationOptions = ['Atelectasis', 'Cardiomegaly', 'Edema', 'Effusion', 
+    'Infiltration', 'Mass', 'No Finding', 'Nodule', 
+    'Pneumothorax', 'Consolidation/Pneumonia'];
 
   const handleRowClick = (index) => {
     if (!editMode || editedImage._id !== untrainedImages[index]._id) {
@@ -60,46 +62,25 @@ const ImageDataTable = ({ untrainedImages, fetchUntrainedImages, editImageInfo, 
   };
 
   // New function to call the fine-tuning API
-  const runFineTune = () => {
-    fetch(`http://${server_ip}/finetune`, {
-      method: 'POST',
-    })
-      .then(response => {
-        if (response.ok) {
-          return response.json();
-        }
-        throw new Error('Failed to fine-tune the model');
-      })
-      .then(data => {
-        setMessage('Fine-tuning completed successfully');
-        setAlertType(1); // Success
-        console.log('Fine-tuning output:', data.output);
-      })
-      .catch(error => {
-        console.error('Error during fine-tuning:', error);
-        setMessage('Fine-tuning failed');
-        setAlertType(0); // Failure
-      });
-  };
+
 
   return (
     <div>
-      <div className="mb-3">
-        <button 
-          className="btn btn-primary" 
-          onClick={downloadUntrainedImages}
-        >
-          Download Untrained Images
-        </button>
+    <div className="mb-3">
+      <button 
+        className="btn btn-primary" 
+        onClick={downloadUntrainedImages}
+      >
+        Download Untrained Images
+      </button>
 
-        {/* New button to trigger fine-tuning */}
-        <button 
-          className="btn btn-secondary ml-2" 
-          onClick={runFineTune}
-        >
-          Run Fine-tune
-        </button>
-      </div>
+      <button 
+        className="btn btn-secondary ml-2" 
+        onClick={runFineTune}
+      >
+        Run Fine-tune
+      </button>
+    </div>
       <table className="table table-striped table-bordered table-hover">
         <thead>
           <tr>
