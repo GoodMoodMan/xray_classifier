@@ -1,4 +1,3 @@
-
 const express = require('express');
 const mongoose = require('mongoose');
 const app = express();
@@ -8,20 +7,15 @@ const multer = require('multer');
 const path = require('path');
 const XrayImage = require('./models/XrayImage');
 
-const crypto = require('crypto');
-const axios = require('axios');
-
 const { spawn } = require('child_process');
 
 const fs = require('fs').promises;
 const os = require('os');
 
-
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || 'localhost';
 
 app.use(cors());
-
 app.use(express.json());
 
 const mongoURI = "mongodb+srv://test:ljR36wHjImUdTaad@cluster0.flnm2su.mongodb.net/xray?retryWrites=true&w=majority";
@@ -30,23 +24,12 @@ mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('Connected to MongoDB'))
   .catch(error => console.error('Error connecting to MongoDB:', error));
 
-// Create mongo connection
-const conn = mongoose.createConnection(mongoURI);
-
-
-const ImageSchema = new mongoose.Schema({
-  filename: String,
-  contentType: String,
-  imageData: Buffer,
-  classification: Object
-});
-
-
-const Image = mongoose.model('Image', ImageSchema);
-
-const upload = multer({
-  storage: multer.memoryStorage()
-});
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // Limit file size to 10MB
+    },
+  });
 
 async function classifyXRay(imageBuffer) {
   const tempFilePath = path.join(os.tmpdir(), `temp_image_${Date.now()}.jpg`);
@@ -55,7 +38,6 @@ async function classifyXRay(imageBuffer) {
     await fs.writeFile(tempFilePath, imageBuffer);
     console.log(`Temporary file created at: ${tempFilePath}`);
 
-    // Check if the file exists
     await fs.access(tempFilePath);
     console.log('Temporary file exists and is accessible');
 
@@ -83,7 +65,6 @@ async function classifyXRay(imageBuffer) {
         console.log('Full debug info:', debugInfo);
         console.log('Full result:', result);
 
-        // Clean up the temporary file
         try {
           await fs.unlink(tempFilePath);
           console.log('Temporary file deleted');
@@ -111,45 +92,85 @@ async function classifyXRay(imageBuffer) {
   }
 }
 
-// Add this new route for image upload
-app.post('/upload', upload.single('image'), async (req, res) => {
-  if (req.file) {
-    console.log('File received:', req.file.originalname);
-    try {
-      console.log('Starting image classification...');
-      const classification = await classifyXRay(req.file.buffer);
-      console.log('Classification completed:', classification);
+app.post('/validate-and-classify', upload.single('image'), async (req, res) => {
+  console.log('Received validate and classify request');
+  console.log('Request body:', req.body);
+  console.log('File:', req.file);
 
-      const newImage = new Image({
-        filename: req.file.originalname,
-        contentType: req.file.mimetype,
-        imageData: req.file.buffer,
-        classification: classification
-      });
-
-      console.log('Saving image to database...');
-      await newImage.save();
-      console.log('Image saved successfully');
-
-      res.json({
-        message: 'X-ray classified and uploaded successfully',
-        file: {
-          filename: req.file.originalname,
-          id: newImage._id
-        },
-        classification: classification
-      });
-    } catch (error) {
-      console.error('Error processing upload:', error);
-      res.status(500).json({
-        message: 'Error processing upload',
-        error: error.toString()
-      });
-    }
-  } else {
+  if (!req.file) {
     console.log('No file uploaded');
-    res.status(400).json({
-      message: 'No file uploaded'
+    return res.status(400).json({ 
+      message: 'No file uploaded', 
+      isValid: false, 
+      classification: null
+    });
+  }
+
+  try {
+    console.log('Starting image classification...');
+    const classification = await classifyXRay(req.file.buffer);
+    console.log('Classification completed:', classification);
+
+    res.json({
+      message: 'X-ray classified successfully',
+      isValid: classification.is_xray,
+      classification: classification.chest_conditions
+    });
+  } catch (error) {
+    console.error('Error during classification:', error);
+    res.status(500).json({
+      message: 'Error during classification',
+      isValid: false,
+      classification: null,
+      error: error.toString()
+    });
+  }
+});
+
+
+app.post('/upload-to-dataset', upload.single('imageData'), async (req, res) => {
+  console.log('Received upload to dataset request');
+  console.log('Request body:', req.body);
+  console.log('File:', req.file);
+
+  if (!req.file) {
+    console.log('No file uploaded');
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  if (!req.body.personId || !req.body.finalClassification || !req.body.classification) {
+    console.log('Missing required fields');
+    return res.status(400).json({ message: 'Person ID, final classification, and classification are required' });
+  }
+
+  try {
+    const newXrayImage = new XrayImage({
+      personId: req.body.personId,
+      imageData: req.file.buffer,
+      contentType: req.file.mimetype,
+      size: req.file.size,
+      classification: JSON.parse(req.body.classification),
+      analysis: 'Untrained',
+      finalClassification: req.body.finalClassification,
+      uploadDate: new Date()
+    });
+
+    console.log('Saving X-ray image to database...');
+    await newXrayImage.save();
+    console.log('X-ray image saved successfully');
+
+    res.json({
+      message: 'X-ray uploaded to dataset successfully',
+      file: {
+        filename: req.file.originalname,
+        id: newXrayImage._id
+      }
+    });
+  } catch (error) {
+    console.error('Error processing upload:', error);
+    res.status(500).json({
+      message: 'Error processing upload',
+      error: error.toString()
     });
   }
 });
@@ -251,42 +272,7 @@ app.listen(PORT, HOST, () => {
 });
 
 
-// task list update
-// 
-// app.put('/users/:username/tasks', (req, res) => {
-//   if (req.method === 'OPTIONS') {
-//     return res.status(200).json(({
-//       body: "OK"
-//     }))
-//   }
 
-//   const { username } = req.params;
-//   const { tasks } = req.body;
-//   console.log("START");
-//   User.findOneAndUpdate(
-//     { username: username }, // criteria to find the user
-//     { $set: { tasks: tasks } }, // Update operation
-//     { new: true } // Options: Return the updated document
-//   )
-//     .then(updatedUser => {
-//       if (updatedUser) {
-//         // User found and updated successfully
-//         console.log('User tasks updated:', updatedUser);
-//         console.log("Finish Update");
-//         res.status(200).send('Task list updated successfully');
-//       } else {
-//         // User not found
-//         console.log('User not found');
-//         res.status(404).json({ error: 'User not found' });
-//       }
-//     })
-//     .catch(error => {
-//       // Error occurred
-//       console.log('Error updating user tasks:', error);
-//       res.status(500).json({ error: 'Internal server error' });
-//     });
-
-// });
 // GET all users for admin
 app.get('/users/admin', (req, res) => {
   if (req.method === 'OPTIONS') {
@@ -305,28 +291,170 @@ app.get('/users/admin', (req, res) => {
     });
 });
 
-// PUT route to update the User collection with the complete user list
-// app.put('/users/admin', (req, res) => {
-//   if (req.method === 'OPTIONS') {
-//     return res.status(200).json({
-//       body: 'OK',
-//     });
-//   }
+app.get('/untrained-images', async (req, res) => {
+  try {
+    const untrainedImages = await XrayImage.find({ analysis: 'Untrained' });
+    res.json(untrainedImages);
+  } catch (error) {
+    console.error('Error fetching untrained images:', error);
+    res.status(500).json({ error: 'Failed to fetch untrained images' });
+  }
+});
 
-//   const userList = req.body;
+app.post('/finetune', async (req, res) => {
+  console.log('Received fine-tune request');
 
-//   User.deleteMany({}) // Remove all existing users
-//     .then(() => {
-//       return User.insertMany(userList); // Insert the new user list
-//     })
-//     .then(() => {
-//       res.status(200).send('User list updated successfully');
-//     })
-//     .catch(error => {
-//       console.error('Error updating user list:', error);
-//       res.status(500).json({ error: 'Internal server error' });
-//     });
-// });
+  try {
+    const pythonProcess = spawn('python', ['finetune.py']);
+
+    let result = '';
+    let errorOutput = '';
+
+    // Capture output from Python script
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+      console.log('Python script output:', data.toString());
+    });
+
+    // Capture any errors
+    pythonProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      console.error('Python script error:', data.toString());
+    });
+
+    // When the Python process finishes
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        res.status(200).json({ message: 'Fine-tuning completed', output: result });
+      } else {
+        res.status(500).json({ message: 'Fine-tuning failed', error: errorOutput });
+      }
+    });
+  } catch (error) {
+    console.error('Error during fine-tuning:', error);
+    res.status(500).json({ message: 'Error during fine-tuning', error: error.toString() });
+  }
+});
+
+
+app.get('/download-untrained-images', async (req, res) => {
+  try {
+    const untrainedImages = await XrayImage.find({ analysis: 'Untrained' });
+    
+    const baseDir = path.join(__dirname, 'untrained_images');
+    try {
+      await fs.access(baseDir);
+    } catch {
+      await fs.mkdir(baseDir, { recursive: true });
+    }
+
+    let downloadedCount = 0;
+    let skippedCount = 0;
+
+    for (const image of untrainedImages) {
+      const classificationDir = path.join(baseDir, image.finalClassification);
+      try {
+        await fs.access(classificationDir);
+      } catch {
+        await fs.mkdir(classificationDir, { recursive: true });
+      }
+
+      const filePath = path.join(classificationDir, `${image._id}.png`);
+      
+      // Check if file already exists
+      try {
+        await fs.access(filePath);
+        // If we reach here, the file exists
+        skippedCount++;
+      } catch {
+        // If we reach here, the file doesn't exist, so we create it
+        await fs.writeFile(filePath, image.imageData);
+        downloadedCount++;
+      }
+    }
+
+  app.post('/finetune', async (req, res) => {
+  console.log('Received fine-tune request');
+
+  try {
+    const pythonProcess = spawn('python', ['finetune.py']);
+
+    let result = '';
+    let errorOutput = '';
+
+    // Capture output from Python script
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+      console.log('Python script output:', data.toString());
+    });
+
+    // Capture any errors
+    pythonProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      console.error('Python script error:', data.toString());
+    });
+
+    // When the Python process finishes
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        res.status(200).json({ message: 'Fine-tuning completed', output: result });
+      } else {
+        res.status(500).json({ message: 'Fine-tuning failed', error: errorOutput });
+      }
+    });
+  } catch (error) {
+    console.error('Error during fine-tuning:', error);
+    res.status(500).json({ message: 'Error during fine-tuning', error: error.toString() });
+  }
+});
+
+    res.send(`Operation complete. Downloaded ${downloadedCount} new images. Skipped ${skippedCount} existing images.`);
+  } catch (error) {
+    console.error('Error processing untrained images:', error);
+    res.status(500).json({ error: 'Failed to process untrained images' });
+  }
+});
+
+module.exports = app;
+
+app.put('/images/:imageId', async (req, res) => {
+  const { imageId } = req.params;
+  const updatedInfo = req.body;
+
+  try {
+    // Validate imageId
+    if (!mongoose.Types.ObjectId.isValid(imageId)) {
+      return res.status(400).json({ error: 'Invalid image ID' });
+    }
+
+    const updatedImage = await XrayImage.findByIdAndUpdate(imageId, updatedInfo, { new: true });
+    if (!updatedImage) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    res.json(updatedImage);
+  } catch (error) {
+    console.error('Error updating image information:', error);
+    res.status(500).json({ error: 'Failed to update image information', details: error.message });
+  }
+});
+
+// New route: Delete image from the dataset
+app.delete('/images/:imageId', async (req, res) => {
+  const { imageId } = req.params;
+
+  try {
+    const deletedImage = await XrayImage.findByIdAndDelete(imageId);
+    if (!deletedImage) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    res.json({ message: 'Image deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+
 
 
 

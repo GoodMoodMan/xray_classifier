@@ -57,7 +57,7 @@ xray_detector = XrayDetector()
 xray_detector.load_state_dict(torch.load('chest_xray_classifier.pth', map_location=torch.device('cpu')))
 xray_detector.eval()
 
-num_classes = 8  # Adjust this to match your new model
+num_classes = 10  # Adjust this to match your new model
 chest_classifier = ChestXRayClassifier(num_classes)
 chest_classifier.load_state_dict(torch.load('best_chest_xray_classifier.pth', map_location=torch.device('cpu')))
 chest_classifier.eval()
@@ -113,8 +113,9 @@ def classify_image(image_path):
         chest_probabilities = predict_chest_conditions(chest_classifier, image_tensor, age, gender, view)
         
         # Define your chest condition labels
-        chest_labels = ['Atelectasis', 'Cardiomegaly', 'Consolidation', 'Effusion', 
-                        'Infiltration', 'Mass', 'Nodule', 'No Finding']
+        chest_labels = ['Atelectasis', 'Cardiomegaly', 'Edema', 'Effusion', 
+                    'Infiltration', 'Mass', 'No Finding', 'Nodule', 
+                    'Pneumothorax', 'Consolidation/Pneumonia']
         
         chest_results = {label: prob.item() for label, prob in zip(chest_labels, chest_probabilities)}
         
