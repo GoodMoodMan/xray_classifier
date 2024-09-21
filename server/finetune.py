@@ -1,6 +1,7 @@
 import torch
 import torchvision.transforms as transforms
 from torchvision import datasets, models
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.nn as nn
@@ -12,8 +13,8 @@ data_dir = './untrained_images'
 batch_size = 32
 num_epochs = 10
 
-# Define the device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Define the device (always use CPU)
+device = torch.device("cpu")
 
 # Data transforms
 data_transforms = transforms.Compose([
@@ -30,27 +31,35 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 # Get class names
 class_names = train_dataset.classes
 
-# Load a pre-trained ResNet50 model
-model = models.resnet50(pretrained=False)
-num_ftrs = model.fc.in_features
+# Load a pre-trained efficientnet_b0 model
+model = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
 
 # Modify the final layer to match the number of classes
-model.fc = nn.Linear(num_ftrs, len(class_names))
+num_ftrs = model.classifier[1].in_features
+model.classifier[1] = nn.Linear(num_ftrs, len(class_names))
 
 # Load pre-trained model weights
-model.load_state_dict(torch.load('./best_chest_xray_classifier.pth'))
+checkpoint = torch.load('./best_chest_xray_classifier.pth', map_location=torch.device('cpu'), weights_only=True)
+model_dict = model.state_dict()
+pretrained_dict = {k: v for k, v in checkpoint.items() if k in model_dict and v.shape == model_dict[k].shape}
+model_dict.update(pretrained_dict)
+model.load_state_dict(model_dict)
 
-# Freeze all layers except the final one for fine-tuning
-for param in model.parameters():
-    param.requires_grad = False
-model.fc.requires_grad = True
+# Freeze all layers except the final classifier
+for name, param in model.named_parameters():
+    if "classifier" not in name:
+        param.requires_grad = False
 
-# Move model to device
+# Ensure the classifier parameters require gradients
+for param in model.classifier.parameters():
+    param.requires_grad = True
+
+# Move model to device (CPU)
 model = model.to(device)
 
 # Define loss function and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.fc.parameters(), lr=0.001)
+optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001)
 
 # Training loop without validation
 def train_model(model, criterion, optimizer, num_epochs=10):
