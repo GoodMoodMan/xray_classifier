@@ -1,102 +1,135 @@
 import torch
-import torchvision.transforms as transforms
-from torchvision import datasets, models
-from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
-from torch.utils.data import DataLoader
-import torch.optim as optim
 import torch.nn as nn
+import torch.nn.functional as F
+import torchvision.transforms as transforms
+from torchvision.models import efficientnet_b0
+from torch.utils.data import Dataset, DataLoader
+import torch.optim as optim
 import os
 from tqdm import tqdm
+from PIL import Image
 
-# Define data paths
-data_dir = './untrained_images'
-batch_size = 32
-num_epochs = 10
+# Define the fixed set of 10 classes
+FIXED_CLASSES = ['Atelectasis', 'Cardiomegaly', 'Edema', 'Effusion', 
+                 'Infiltration', 'Mass', 'No Finding', 'Nodule', 
+                 'Pneumothorax', 'Consolidation/Pneumonia']
 
-# Define the device (always use CPU)
-device = torch.device("cpu")
+class ChestXRayDataset(Dataset):
+    def __init__(self, data_dir, transform=None):
+        self.data_dir = data_dir
+        self.transform = transform
+        self.images = []
+        self.labels = []
+        self.class_names = FIXED_CLASSES
+        
+        available_classes = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
+        
+        for class_idx, class_name in enumerate(self.class_names):
+            if class_name in available_classes:
+                class_dir = os.path.join(data_dir, class_name)
+                for img_name in os.listdir(class_dir):
+                    self.images.append(os.path.join(class_dir, img_name))
+                    self.labels.append(class_idx)
+            else:
+                print(f"Warning: Class '{class_name}' not found in the data directory.")
 
-# Data transforms
-data_transforms = transforms.Compose([
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        img_path = self.images[idx]
+        image = Image.open(img_path).convert('RGB')
+        label = self.labels[idx]
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, label
+
+class ChestXRayClassifier(nn.Module):
+    def __init__(self, num_classes, model_name='efficientnet_b0'):
+        super(ChestXRayClassifier, self).__init__()
+        self.base_model = efficientnet_b0(pretrained=False)
+        num_ftrs = self.base_model.classifier[1].in_features
+        self.base_model.classifier = nn.Identity()
+        self.fc1 = nn.Linear(num_ftrs + 3, 512)  # +3 for age, gender, view
+        self.fc2 = nn.Linear(512, num_classes)
+
+    def forward(self, x, age, gender, view):
+        x = self.base_model(x)
+        x = torch.cat((x, age.unsqueeze(1), gender.unsqueeze(1), view.unsqueeze(1)), dim=1)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
+transform = transforms.Compose([
     transforms.Resize((224, 224)),
-    transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-# Load the data (train only if no validation is needed)
-train_dataset = datasets.ImageFolder(data_dir, transform=data_transforms)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-# Get class names
-class_names = train_dataset.classes
-
-# Load a pre-trained efficientnet_b0 model
-model = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-
-# Modify the final layer to match the number of classes
-num_ftrs = model.classifier[1].in_features
-model.classifier[1] = nn.Linear(num_ftrs, len(class_names))
-
-# Load pre-trained model weights
-checkpoint = torch.load('./best_chest_xray_classifier.pth', map_location=torch.device('cpu'), weights_only=True)
-model_dict = model.state_dict()
-pretrained_dict = {k: v for k, v in checkpoint.items() if k in model_dict and v.shape == model_dict[k].shape}
-model_dict.update(pretrained_dict)
-model.load_state_dict(model_dict)
-
-# Freeze all layers except the final classifier
-for name, param in model.named_parameters():
-    if "classifier" not in name:
-        param.requires_grad = False
-
-# Ensure the classifier parameters require gradients
-for param in model.classifier.parameters():
-    param.requires_grad = True
-
-# Move model to device (CPU)
-model = model.to(device)
-
-# Define loss function and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001)
-
-# Training loop without validation
-def train_model(model, criterion, optimizer, num_epochs=10):
+def fine_tune_model(model, train_loader, criterion, optimizer, num_epochs, device):
+    model.train()
     for epoch in range(num_epochs):
-        print(f'Epoch {epoch+1}/{num_epochs}')
-        print('-' * 10)
-
-        model.train()  # Set model to training mode
         running_loss = 0.0
-        running_corrects = 0
+        correct = 0
+        total = 0
 
-        # Iterate over data
-        for inputs, labels in tqdm(train_loader):
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+        train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
+
+        for inputs, labels in train_pbar:
+            inputs, labels = inputs.to(device), labels.to(device)
+            
+            # Generate dummy values for age, gender, and view
+            batch_size = inputs.size(0)
+            age = torch.full((batch_size,), 50.0, device=device)
+            gender = torch.full((batch_size,), 1.0, device=device)
+            view = torch.full((batch_size,), 1.0, device=device)
 
             optimizer.zero_grad()
-
-            # Forward pass
-            outputs = model(inputs)
-            _, preds = torch.max(outputs, 1)
+            outputs = model(inputs, age, gender, view)
             loss = criterion(outputs, labels)
-
-            # Backward pass and optimization
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item() * inputs.size(0)
-            running_corrects += torch.sum(preds == labels.data)
+            running_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
 
-        epoch_loss = running_loss / len(train_dataset)
-        epoch_acc = running_corrects.double() / len(train_dataset)
+            train_pbar.set_postfix({'loss': f"{loss.item():.4f}", 'acc': f"{100.*correct/total:.2f}%"})
 
-        print(f'Train Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader):.4f}, Acc: {100.*correct/total:.2f}%')
 
-    # Save the final model after fine-tuning
-    torch.save(model.state_dict(), 'fine_tuned_model_new.pth')
+    return model
 
-# Run training
-train_model(model, criterion, optimizer, num_epochs=num_epochs)
+def main(data_dir, num_epochs=10, batch_size=32):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    dataset = ChestXRayDataset(data_dir, transform=transform)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+
+    num_classes = len(FIXED_CLASSES)
+    print(f"Number of classes: {num_classes}")
+
+    model = ChestXRayClassifier(num_classes).to(device)
+
+    try:
+        state_dict = torch.load('best_chest_xray_classifier.pth', map_location=device)
+        model.load_state_dict(state_dict)
+        print("Loaded existing model weights.")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        print("Initializing with default weights.")
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    fine_tuned_model = fine_tune_model(model, dataloader, criterion, optimizer, num_epochs, device)
+
+    torch.save(fine_tuned_model.state_dict(), 'best_chest_xray_classifier.pth')
+    print("Fine-tuned model saved as 'best_chest_xray_classifier.pth'")
+
+if __name__ == "__main__":
+    data_dir = './untrained_images'  # Update this to your data directory
+    main(data_dir, num_epochs=10, batch_size=32)
