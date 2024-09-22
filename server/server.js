@@ -371,51 +371,20 @@ app.get('/download-untrained-images', async (req, res) => {
         await fs.writeFile(filePath, image.imageData);
         downloadedCount++;
       }
+
+      // Update the analysis field to 'Trained'
+      await XrayImage.findByIdAndUpdate(image._id, { analysis: 'Trained' });
     }
 
-  app.post('/finetune', async (req, res) => {
-  console.log('Received fine-tune request');
-
-  try {
-    const pythonProcess = spawn('python', ['finetune.py']);
-
-    let result = '';
-    let errorOutput = '';
-
-    // Capture output from Python script
-    pythonProcess.stdout.on('data', (data) => {
-      result += data.toString();
-      console.log('Python script output:', data.toString());
-    });
-
-    // Capture any errors
-    pythonProcess.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-      console.error('Python script error:', data.toString());
-    });
-
-    // When the Python process finishes
-    pythonProcess.on('close', (code) => {
-      if (code === 0) {
-        res.status(200).json({ message: 'Fine-tuning completed', output: result });
-      } else {
-        res.status(500).json({ message: 'Fine-tuning failed', error: errorOutput });
-      }
-    });
+    res.send(`Downloaded ${downloadedCount} images, skipped ${skippedCount} existing images. All images marked as Trained.`);
   } catch (error) {
-    console.error('Error during fine-tuning:', error);
-    res.status(500).json({ message: 'Error during fine-tuning', error: error.toString() });
+    console.error('Error in download-untrained-images:', error);
+    res.status(500).send('An error occurred while processing the images');
   }
 });
 
-    res.send(`Operation complete. Downloaded ${downloadedCount} new images. Skipped ${skippedCount} existing images.`);
-  } catch (error) {
-    console.error('Error processing untrained images:', error);
-    res.status(500).json({ error: 'Failed to process untrained images' });
-  }
-});
 
-module.exports = app;
+
 
 app.put('/images/:imageId', async (req, res) => {
   const { imageId } = req.params;
